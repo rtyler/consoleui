@@ -8,6 +8,8 @@ import consoleui.events
 class Keys(object):
 	ESCAPE = 27 # curses doesn't define a KEY_ESCAPE for some reason
 
+focus_stack = []
+
 class Widget(object):
 	'''
 		Abstract base class for all ConsoleUI classes
@@ -21,13 +23,28 @@ class Widget(object):
 		raise consoleui.errors.AbstractError('render() should be defined in the class subclassing Widget')
 
 	def focus(self):
-		pass
+		global focus_stack
+		focus_stack.append(weakref.proxy(self))
+
+	def unfocus(self):
+		global focus_stack
+		focus_stack.pop()
+		if len(focus_stack):
+			focus_stack[-1].focus()
 
 	def redraw(self):
 		pass
 
 	def minimize(self):
 		pass
+
+	def draw_padded_line(self, window, y, x, line, attrs=0):
+		winy, winx = window.getmaxyx()
+		window.addstr(y, x, '%s%s' % (line, ''.join([' ' for x in xrange( (winx - len(line) - x - 1) )])), attrs)
+
+	def draw_hline(self, window, y, x):
+		winy, winx = window.getmaxyx()
+		window.hline(y, x, curses.ACS_HLINE, (winx - x - 1))
 
 class Menu(Widget):
 	''' 
@@ -80,6 +97,7 @@ class Menu(Widget):
 		self.render()
 
 	def focus(self):
+		super(Menu, self).focus()
 		curses.noecho()
 		key = True
 		window = self.parent.curses_window()
@@ -143,6 +161,7 @@ class Submenu(Widget):
 		return self.render()
 	
 	def focus(self):
+		super(Submenu, self).focus()
 		curses.noecho()
 		key = True
 		while key:
@@ -157,6 +176,16 @@ class Submenu(Widget):
 class Window(Widget):
 	def __init__(self, *args, **kwargs):
 		super(Window, self).__init__(*args, **kwargs)
+		self.cwindow = kwargs.get('cwindow')
+		self.boxed = False
+		self.keyhandler = None
+
+	def curses_window(self):
+		return self.cwindow
+
+	def box(self):
+		self.boxed = True
+		self.cwindow.box()
 
 	def render(self):
 		pass
@@ -164,24 +193,39 @@ class Window(Widget):
 	def redraw(self):
 		pass
 
+	def close(self):
+		self.curses_window().erase()
+		self.curses_window().refresh()
+		self.unfocus()
+
 	def focus(self):
-		pass
+		super(Window, self).focus()
+		curses.noecho()
+		key = True
+		while key:
+			key = self.cwindow.getch()
+			if key == curses.KEY_RESIZE:
+				self.redraw()
+				continue
+			keych = chr(key)
+			if self.keyhandler:
+				key = self.keyhandler(self, key)
 
 class RootWindow(Window):
 	def __init__(self, *args, **kwargs):
+		kwargs['cwindow'] = curses.initscr()
+
 		super(RootWindow, self).__init__(*args, **kwargs)
+
 		self.title = kwargs['title']
 		self.title_attrs = kwargs.get('title_attrs') or 0
+		self.ceiling = 0 # Y-coordinate where usable space starts below title bar
 
-		self.screen = curses.initscr()
-		self.y, self.x = self.screen.getmaxyx()
+		self.y, self.x = self.cwindow.getmaxyx()
 
 		self.install_colors()
 
 		self.title_attrs = self.title_attrs | curses.color_pair(1)
-
-	def curses_window(self):
-		return self.screen
 
 	def install_colors(self):
 		curses.start_color()
@@ -189,19 +233,31 @@ class RootWindow(Window):
 		curses.init_pair(2, curses.COLOR_RED, curses.COLOR_WHITE)
 		curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_RED)
 
-	def draw_padded_line(self, y, x, line, attrs=0, window=None):
-		window = window or self.screen
-		winy, winx = window.getmaxyx()
-		window.addstr(y, x, '%s%s' % (line, ''.join([' ' for x in xrange( (winx - len(line) - x - 1) )])), attrs)
 
 	def render(self):
-		self.y, self.x = self.screen.getmaxyx()
-		self.draw_padded_line(1, 0, self.title, attrs=self.title_attrs)
-		self.screen.hline(2, 0, curses.ACS_HLINE, self.x)
-		self.screen.hline(4, 0, curses.ACS_HLINE, self.x)
+		self.cwindow.bkgdset(0, curses.A_NORMAL)
+		self.cwindow.erase()
+		self.cwindow.refresh()
+		self.y, self.x = self.cwindow.getmaxyx()
+		self.draw_padded_line(self.cwindow, 1, 0, self.title, attrs=self.title_attrs)
+		self.cwindow.hline(2, 0, curses.ACS_HLINE, self.x)
+		self.cwindow.hline(4, 0, curses.ACS_HLINE, self.x)
+		self.ceiling = 5
 
 	def redraw(self):
 		self.render()
-		self.screen.refresh()
+		self.cwindow.refresh()
 
+
+	def centered_subwindow(self):
+		cwin = curses.newwin( (self.y - self.ceiling - 1), (self.x - 2), self.ceiling + 1, 1 )
+		window = Window(cwindow=cwin)
+		return window
+
+	def fill_window(self, window, boxed=False):
+		winy, winx = window.getmaxyx()
+		for i in xrange(winy):
+			if boxed and i == 0 or i == (winy - 1):
+				continue
+			self.draw_padded_line(window, i, 1, '')
 	
