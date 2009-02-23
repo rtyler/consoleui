@@ -1,5 +1,6 @@
 import copy
 import curses
+import sys
 import weakref
 
 import consoleui.errors
@@ -112,9 +113,12 @@ class Menu(Widget):
 			if key == curses.KEY_RESIZE:
 				self.redraw()
 				continue
-			keych = chr(key)
-			if self.keys.get(keych):
-				consoleui.events.manager.fire(self.keys[keych])
+			try:
+				keych = chr(key)
+				if self.keys.get(keych):
+					consoleui.events.manager.fire(self.keys[keych])
+			except ValueError:
+				pass
 
 class Submenu(Widget):
 	''' Submenu is a basic class for handling vertically drawn, i.e. sub-menus '''
@@ -197,7 +201,8 @@ class Window(Widget):
 		super(Window, self).__init__(*args, **kwargs)
 		self.cwindow = kwargs.get('cwindow')
 		self.boxed = False
-		self.keyhandler = None
+		if not hasattr(self, 'keyhandler'):
+			self.keyhandler = None
 
 	def curses_window(self):
 		return self.cwindow
@@ -236,9 +241,8 @@ class Window(Widget):
 			if key == Keys.ESCAPE:
 				self.close()
 				return self.unfocus()
-			keych = chr(key)
 			if self.keyhandler:
-				key = self.keyhandler(self, key)
+				key = self.keyhandler(key)
 		self.unfocus()
 
 class RootWindow(Window):
@@ -260,12 +264,14 @@ class RootWindow(Window):
 		self.install_colors()
 
 		self.title_attrs = self.title_attrs | curses.color_pair(1)
+		self.cwindow.keypad(1)
 
 	def install_colors(self):
 		curses.start_color()
 		curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)
 		curses.init_pair(2, curses.COLOR_RED, curses.COLOR_WHITE)
 		curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_RED)
+		curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
 
 	def render(self):
@@ -289,8 +295,10 @@ class RootWindow(Window):
 		if self.menu:
 			self.menu.focus()
 
-	def centered_subwindow(self):
+	def centered_subwindow(self, window=None):
 		cwin = curses.newwin( (self.y - self.ceiling - 1), (self.x - 2), self.ceiling + 1, 1 )
+		if window:
+			return cwin
 		window = Window(cwindow=cwin)
 		return window
 
