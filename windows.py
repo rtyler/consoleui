@@ -58,8 +58,8 @@ class OpenFileDialog(consoleui.Window):
 				self.redraw(nofullrefresh=True)
 				return True
 			else:
+				self.close()
 				self.callback(path)
-				return None
 		return True
 
 	def dir_listing(self):
@@ -114,9 +114,3 @@ class OpenFileDialog(consoleui.Window):
 		if not kwargs.get('nofullrefresh'):
 			self.parent.redraw()
 
-		
-def OpenFilePlease(start, callback):
-	dialog = OpenFileDialog(start=start, callback=callback)
-	dialog.render()
-	dialog.focus()
-	

@@ -238,11 +238,11 @@ class Window(Widget):
 			if key == curses.KEY_RESIZE:
 				self.redraw()
 				continue
-			if key == Keys.ESCAPE:
-				self.close()
-				return self.unfocus()
-			if self.keyhandler:
+			if key == Keys.ESCAPE or key == ord('q') or key == ord('Q'):
+				key = None
+			if self.keyhandler and key:
 				key = self.keyhandler(key)
+		self.close()
 		self.unfocus()
 
 class RootWindow(Window):
