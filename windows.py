@@ -25,9 +25,10 @@ class OpenFileDialog(consoleui.Window):
 		self.offset = 0
 		self.current_max = 0
 		self.more = False
+		self.last_listing = []
 
 	def keyhandler(self, key):
-		if key == curses.KEY_DOWN:
+		if key == curses.KEY_DOWN and self.selected != len(self.last_listing):
 			self.selected = self.selected + 1
 			self.redraw(nofullrefresh=True)
 			return True
@@ -37,7 +38,7 @@ class OpenFileDialog(consoleui.Window):
 			return True
 
 		if key == 10:
-			listing = self.dir_listing()
+			listing = self.last_listing
 			selected = listing[self.selected]
 			path = '%s%s%s' % (self.cwd, os.path.sep, selected)
 
@@ -55,7 +56,8 @@ class OpenFileDialog(consoleui.Window):
 		listing = os.listdir(self.cwd)
 		listing.sort()
 		listing.insert(0, '..')
-		return listing
+		self.last_listing = listing
+		return self.last_listing
 
 	def render(self):
 		self.cwindow.bkgdset(0, curses.A_REVERSE)
@@ -78,6 +80,9 @@ class OpenFileDialog(consoleui.Window):
 		trimmed = listing[self.offset:(bottom + self.offset)]
 		self.current_max = self.selected
 		self.more = (len(listing) > bottom) and not (len(trimmed) < len(listing[:bottom]))
+
+		if self.selected == len(listing):
+			self.selected = self.selected - 1
 
 		starty, startx = 3, 3 
 		for i in xrange(len(trimmed)):
