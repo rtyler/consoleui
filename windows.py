@@ -27,13 +27,23 @@ class OpenFileDialog(consoleui.Window):
 		self.more = False
 		self.last_listing = []
 
+		self.page_adjust = 5
+
 	def keyhandler(self, key):
-		if key == curses.KEY_DOWN and self.selected != len(self.last_listing):
+		if key == curses.KEY_DOWN and self.selected < len(self.last_listing):
 			self.selected = self.selected + 1
 			self.redraw(nofullrefresh=True)
 			return True
 		if key == curses.KEY_UP and self.selected != 0:
 			self.selected = self.selected - 1
+			self.redraw(nofullrefresh=True)
+			return True
+		if key == curses.KEY_NPAGE and (self.selected + self.page_adjust) < len(self.last_listing):
+			self.selected = self.selected + self.page_adjust
+			self.redraw(nofullrefresh=True)
+			return True
+		if key == curses.KEY_PPAGE and (self.selected - self.page_adjust) > 0:
+			self.selected = self.selected - self.page_adjust
 			self.redraw(nofullrefresh=True)
 			return True
 
@@ -72,22 +82,26 @@ class OpenFileDialog(consoleui.Window):
 		if self.selected >= bottom - 1:
 			if self.selected > self.current_max:
 				if not self.selected == len(listing):
-					self.offset = self.offset + 1
+					self.offset = len(listing) - bottom
 			else:
-				self.offset = self.offset - 1
+				self.offset = self.selected
+				if self.offset < 0:
+					self.offset = 0
 		if self.selected < self.offset:
 			self.offset = self.selected
 		trimmed = listing[self.offset:(bottom + self.offset)]
 		self.current_max = self.selected
 		self.more = (len(listing) > bottom) and not (len(trimmed) < len(listing[:bottom]))
 
+
+		index = self.selected
 		if self.selected == len(listing):
-			self.selected = self.selected - 1
+			index = self.selected - 1 
 
 		starty, startx = 3, 3 
 		for i in xrange(len(trimmed)):
 			entry = trimmed[i]
-			if entry == listing[self.selected]:
+			if entry == listing[index]:
 				self.cwindow.addstr(starty, startx + 1, '>> %s' % entry, curses.A_BOLD)
 			else:
 				self.cwindow.addstr(starty, startx, entry)
