@@ -9,6 +9,7 @@ class Keys(object):
 	ESCAPE = 27 # curses doesn't define a KEY_ESCAPE for some reason
 
 focus_stack = []
+root_window = None
 
 class Widget(object):
 	'''
@@ -23,14 +24,20 @@ class Widget(object):
 		raise consoleui.errors.AbstractError('render() should be defined in the class subclassing Widget')
 
 	def focus(self):
+		curses.noecho()
 		global focus_stack
 		focus_stack.append(weakref.proxy(self))
 
 	def unfocus(self):
+		# Widget.close() will handle adjusting the focus_stack, unfocus will simply focus the next lower Widget
+		global focus_stack
+		if len(focus_stack):
+			focus_stack[-1].redraw()
+			focus_stack[-1].focus()
+
+	def close(self):
 		global focus_stack
 		focus_stack.pop()
-		if len(focus_stack):
-			focus_stack[-1].focus()
 
 	def redraw(self):
 		pass
@@ -94,11 +101,10 @@ class Menu(Widget):
 				x = x + len(self.separator)
 
 	def redraw(self):
-		self.render()
+		self.parent.redraw()
 
 	def focus(self):
 		super(Menu, self).focus()
-		curses.noecho()
 		key = True
 		window = self.parent.curses_window()
 		while key:
@@ -158,17 +164,30 @@ class Submenu(Widget):
 			self._window.refresh()
 	
 	def redraw(self):
-		return self.render()
+		self.render()
+		self.parent.redraw()
+
+	def close(self):
+		self._window.erase()
+		self._window.refresh()
+		self.parent.redraw()
+		global focus_stack
+		super(Submenu, self).close()
+
+	def unfocus(self):
+		self.close()
+		super(Submenu, self).unfocus()
 	
 	def focus(self):
 		super(Submenu, self).focus()
-		curses.noecho()
 		key = True
 		while key:
 			key = self._window.getch()
 			if key == curses.KEY_RESIZE:
 				self.redraw()
 				continue
+			if key == Keys.ESCAPE:
+				return self.unfocus()
 			keych = chr(key)
 			if self.keys.get(keych):
 				consoleui.events.manager.fire(self.keys[keych])
@@ -196,24 +215,39 @@ class Window(Widget):
 	def close(self):
 		self.curses_window().erase()
 		self.curses_window().refresh()
-		self.unfocus()
+		super(Window, self).close()
+
+	def fill_window(self, window, boxed=False):
+		winy, winx = window.getmaxyx()
+		for i in xrange(winy):
+			if boxed and i == 0 or i == (winy - 1):
+				continue
+			self.draw_padded_line(window, i, 1, '')
+	
 
 	def focus(self):
 		super(Window, self).focus()
-		curses.noecho()
 		key = True
 		while key:
 			key = self.cwindow.getch()
 			if key == curses.KEY_RESIZE:
 				self.redraw()
 				continue
+			if key == Keys.ESCAPE:
+				self.close()
+				return self.unfocus()
 			keych = chr(key)
 			if self.keyhandler:
 				key = self.keyhandler(self, key)
+		self.unfocus()
 
 class RootWindow(Window):
 	def __init__(self, *args, **kwargs):
+		global root_window
+		assert root_window == None, ('Cannot run two RootWindow objects at once!')
 		kwargs['cwindow'] = curses.initscr()
+		root_window = self
+		self.menu = None
 
 		super(RootWindow, self).__init__(*args, **kwargs)
 
@@ -246,18 +280,17 @@ class RootWindow(Window):
 
 	def redraw(self):
 		self.render()
+		if self.menu:
+			self.menu.render()
 		self.cwindow.refresh()
 
+	def focus(self):
+		# If I receive focus, and I have a menu, I'll pass it along
+		if self.menu:
+			self.menu.focus()
 
 	def centered_subwindow(self):
 		cwin = curses.newwin( (self.y - self.ceiling - 1), (self.x - 2), self.ceiling + 1, 1 )
 		window = Window(cwindow=cwin)
 		return window
 
-	def fill_window(self, window, boxed=False):
-		winy, winx = window.getmaxyx()
-		for i in xrange(winy):
-			if boxed and i == 0 or i == (winy - 1):
-				continue
-			self.draw_padded_line(window, i, 1, '')
-	
