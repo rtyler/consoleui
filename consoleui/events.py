@@ -58,6 +58,7 @@ class Standard(object):
 
 	Quit = 'consoleui.ApplicationQuit'
 	Exiting = 'consoleui.ApplicationIsExiting'
+	Closing = 'consoleui.WidgetClosing'
 
 
 manager = EventManager(name='Global Notification Center')

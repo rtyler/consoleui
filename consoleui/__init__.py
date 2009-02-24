@@ -28,6 +28,7 @@ class AbstractWidget(object):
 		self.parent = None
 		self.has_focus = False
 		self.propogate_redraws = True
+		events.manager.observe(events.Standard.Closing, self.watch_closes)
 
 	def redraw(self):
 		if self.propogate_redraws:
@@ -42,9 +43,17 @@ class AbstractWidget(object):
 	def close(self):
 		for child in self.children:
 			child.close()
+		events.manager.fire(events.Standard.Closing, widget=self)
+		if self.parent:
+			self.parent.redraw()
 
 	def handle_input(self, keycode):
 		return True
+
+	def watch_closes(self, event_name, **eventkwargs):
+		widget = eventkwargs.get('widget')
+		if widget:
+			self.children = [c for c in self.children if not c == widget]
 
 	def addchild(self, widget, focus):
 		if not isinstance(widget, AbstractWidget):
@@ -139,6 +148,10 @@ class RootMenu(AbstractWidget):
 		self.elements = kwargs['elements']
 		self.keys = {}
 		self.y, self.x = 1, 1
+
+	def redraw(self):
+		super(RootMenu, self).redraw()
+		self.render()
 
 	def render(self):
 		assert self.parent, ('RootMenu cannot have a parent set to None in order to render!')
