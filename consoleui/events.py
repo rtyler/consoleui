@@ -40,7 +40,7 @@ class EventManager(object):
 		self.observers[event_name] = stack
 		return rc
 
-	def fire(self, event_name, **eventargs):
+	def fire(self, event_name, **eventkwargs):
 		'''
 			Fire the actual event, this will cause observers to execute serially 
 
@@ -49,7 +49,7 @@ class EventManager(object):
 		rc = []
 		if self.observers.get(event_name):
 			for func in self.observers[event_name]:
-				rc.append( func(event_name, **eventargs) )
+				rc.append( func(event_name, **eventkwargs) )
 		return rc
 
 class Standard(object):

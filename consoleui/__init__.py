@@ -43,6 +43,16 @@ class AbstractWidget(object):
 		for child in self.children:
 			child.close()
 
+	def handle_input(self, keycode):
+		return True
+
+	def addchild(self, widget):
+		if not isinstance(widget, AbstractWidget):
+			raise errors.InvalidArgumentError('AbstractWidget.addchild(widget) only accepts instantiated AbstractWidget subclasses')
+		self.children.append(widget)
+		widget.parent = weakref.proxy(self)
+		return True
+
 class RootWindow(AbstractWidget):
 	exit_keys = [util.Keys.ESCAPE, ord('q'), ord('Q')]
 
@@ -59,6 +69,8 @@ class RootWindow(AbstractWidget):
 		self.y, self.x = self._cwin.getmaxyx()
 
 		self._install_colors()
+
+		events.manager.observe(events.Standard.Quit, self.close)
 
 	def _install_colors(self):
 		curses.start_color()
@@ -83,7 +95,7 @@ class RootWindow(AbstractWidget):
 		self.propogate_redraws = True
 		super(RootWindow, self).redraw()
 
-	def close(self):
+	def close(self, *args, **kwargs):
 		super(RootWindow, self).close()
 
 		curses.echo()
@@ -104,8 +116,61 @@ class RootWindow(AbstractWidget):
 				self.run = False
 				events.manager.fire(events.Standard.Exiting)
 				continue
-			self.run = False # Fall through for now
+
+			for child in self.children:
+				if not child.has_focus:
+					continue
+				self.run = child.handle_input(keycode)
+				self.run = [r for r in self.run if r]
 		self.close()
 
+class RootMenu(AbstractWidget):
+	separator = '  |  '
+	HOTKEY = curses.A_BOLD | curses.A_UNDERLINE
+
+	def __init__(self, *args, **kwargs):
+		super(RootMenu, self).__init__(*args, **kwargs)
+		self.elements = kwargs['elements']
+		self.keys = {}
+		self.y, self.x = 1, 1
+		self.has_focus = True # Default to maintaining focus
+
+	def render(self):
+		assert self.parent, ('RootMenu cannot have a parent set to None in order to render!')
+		x, y = 1, self.parent.ceiling 
+		window = self.parent._cwin
+		for element in self.elements:
+			item, event = element
+			under = None
+			try:
+				under = item.index('_')
+			except ValueError:
+				pass
+
+			if not under == None:
+				action_key = item[under+1:under+2]
+				self.keys[action_key] = event
+				window.addstr(y, x, action_key, self.HOTKEY)
+				x = x + 1
+				window.addstr(y, x, item[under+2:], curses.A_NORMAL)
+				x = x + len(item[under+2:])
+			else:
+				window.addstr(y, x, item, curses.A_NORMAL)
+				x = x + len(item)
+
+			if element != self.elements[-1]:
+				window.addstr(y, x, self.separator, curses.A_NORMAL)
+				x = x + len(self.separator)
+
+		util.UI.draw_hline(window, 3, 0)
+
+	def handle_input(self, keycode):
+		try:
+			keych = chr(keycode)
+			if self.keys.get(keych):
+				return events.manager.fire(self.keys[keych], widget=weakref.proxy(self))
+		except ValueError:
+			pass
+		return True
 
 
