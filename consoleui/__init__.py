@@ -191,3 +191,55 @@ class RootMenu(AbstractWidget):
 		return True
 
 
+class Scrollable(AbstractWidget):
+	pass
+
+class ScrollableTextView(Scrollable):
+	def __init__(self, *args, **kwargs):
+		super(ScrollableTextView, self).__init__(*args, **kwargs)
+
+		self.lines = kwargs['lines']
+		self.wordwrap = kwargs.get('wordwrap')
+		self.height = len(self.lines) + 2
+		self.width = 0
+		for line in self.lines:
+			if len(line) > self.width:
+				self.width = len(line)
+
+		self.width = self.width + 5
+		self._cpad = None
+		self._minrow = 0
+		self._maxrow = 0
+
+
+	def render(self):
+		parenty, parentx = self.parent._cwin.getmaxyx()
+		if self.wordwrap:
+			self.width = parentx
+			self.height = parenty * 2
+		self._maxrow = parenty
+		if not self._cpad:
+			self._cpad = curses.newpad(self.height, self.width)
+			y = 0 
+			for line in self.lines:
+				if not self.wordwrap:
+					util.UI.draw_padded_line(self._cpad, i, 0, line)
+				else:
+					chunks = line.split(' ')
+					x = 0
+					length = 0
+					for chunk in chunks:
+						if (length + len(chunk) + 1) > self.width:
+							y = y + 1
+							x = 0
+							length = 0
+						util.UI.draw_padded_line(self._cpad, y, x, '%s ' % chunk)
+						bump = (len(chunk) + 1)
+						length = length + bump
+						x = x + bump
+				y = y + 1
+		
+		self._cpad.refresh(0, 0, self._minrow, 0, self._maxrow - 1, self.width)
+
+		super(ScrollableTextView, self).render()
+
