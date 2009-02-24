@@ -46,11 +46,16 @@ class AbstractWidget(object):
 	def handle_input(self, keycode):
 		return True
 
-	def addchild(self, widget):
+	def addchild(self, widget, focus):
 		if not isinstance(widget, AbstractWidget):
 			raise errors.InvalidArgumentError('AbstractWidget.addchild(widget) only accepts instantiated AbstractWidget subclasses')
+		if focus:
+			for child in self.children:
+				child.has_focus = False
+
 		self.children.append(widget)
 		widget.parent = weakref.proxy(self)
+		widget.has_focus = focus
 		return True
 
 class RootWindow(AbstractWidget):
@@ -121,7 +126,8 @@ class RootWindow(AbstractWidget):
 				if not child.has_focus:
 					continue
 				self.run = child.handle_input(keycode)
-				self.run = [r for r in self.run if r]
+				if isinstance(self.run, list):
+					self.run = [r for r in self.run if r]
 		self.close()
 
 class RootMenu(AbstractWidget):
@@ -133,7 +139,6 @@ class RootMenu(AbstractWidget):
 		self.elements = kwargs['elements']
 		self.keys = {}
 		self.y, self.x = 1, 1
-		self.has_focus = True # Default to maintaining focus
 
 	def render(self):
 		assert self.parent, ('RootMenu cannot have a parent set to None in order to render!')
@@ -161,7 +166,6 @@ class RootMenu(AbstractWidget):
 			if element != self.elements[-1]:
 				window.addstr(y, x, self.separator, curses.A_NORMAL)
 				x = x + len(self.separator)
-
 		util.UI.draw_hline(window, 3, 0)
 
 	def handle_input(self, keycode):

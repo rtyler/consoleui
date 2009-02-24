@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
 import consoleui
+import consoleui.dialogs
 
 def _aboutmenu_handler(event_name, **eventkwargs):
 	widget = eventkwargs['widget']
-	widget.parent._cwin.addstr(5, 3, 'Hello there world!')
+	dialog = consoleui.dialogs.ModalDialog(parent=widget.parent, message='Helllooo World!')
+	widget.parent.addchild(dialog, False)
+	dialog.render()
 	return True
 
 def _exitmenu_handler(event_name, **eventkwargs):
